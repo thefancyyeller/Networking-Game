@@ -22,7 +22,7 @@ public class GamePanel extends JPanel{
     public GamePanel(){
         super();
         this.setFocusable(true);
-        this.requestFocus();
+        this.requestFocusInWindow();
         this.setPreferredSize(new Dimension(800, 600));
         // Spawn player
         this.ctx.tanks.add(new PlayerEntity("./data/greentank.png"));

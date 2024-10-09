@@ -9,6 +9,11 @@ public class ChatPanel extends JPanel {
     public JTextArea chatArea;
     public JScrollPane scrollPane;
     public JTextField chatInput;
+    private GamePanel gamePanel;
+
+    public void setGamePanel(GamePanel gamePanel) {
+        this.gamePanel = gamePanel;
+    }
 
     public ChatPanel() {
         // Creates chat components
@@ -27,6 +32,10 @@ public class ChatPanel extends JPanel {
                 if (!message.isEmpty()) {
                     chatArea.append("You: " + message + "\n");
                     chatInput.setText("");
+                    // Request focus back to the game panel
+                    if (gamePanel != null) {
+                        gamePanel.requestFocusInWindow();
+                    }
                 }
             }
         });

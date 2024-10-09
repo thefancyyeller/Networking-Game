@@ -17,9 +17,11 @@ public class Main {
         frame.setSize(800, 600);
 
         // Create 2 panels
-        JPanel gamePanel = new GamePanel();
-        var chatPanel = new ChatPanel();
+        GamePanel gamePanel = new GamePanel();
+        ChatPanel chatPanel = new ChatPanel();
         chatPanel.setBorder(new LineBorder(Color.BLACK));
+
+        chatPanel.setGamePanel(gamePanel);
 
         // Size the panels and add to window
         frame.add(gamePanel, BorderLayout.CENTER);
