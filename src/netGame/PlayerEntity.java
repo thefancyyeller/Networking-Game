@@ -13,7 +13,7 @@ public class PlayerEntity extends Entity{
     public float[] movementVec;// Specifically used to track forces applied to player from inputs
     public boolean isDestroyed = false;
     private BufferedImage sprite;
-    private String initialSpritePath;
+    private final String initialSpritePath;
     public PlayerEntity(String spritePath){
         this.initialSpritePath = spritePath;
         this.physVecs.add(new float[]{0,0});

@@ -19,6 +19,7 @@ public class Main {
         // Create 2 panels
         GamePanel gamePanel = new GamePanel();
         ChatPanel chatPanel = new ChatPanel();
+        chatPanel.setGamePanel(gamePanel);
         chatPanel.setBorder(new LineBorder(Color.BLACK));
 
         chatPanel.setGamePanel(gamePanel);
