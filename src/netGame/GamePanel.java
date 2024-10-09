@@ -2,160 +2,204 @@ package netGame;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
+import java.awt.event.*;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
-public class GamePanel extends JPanel{
+public class GamePanel extends JPanel {
     WorldContext ctx = new WorldContext();
     PlayerEntity player;
-    long lastTick; // Helper var for physics engine
+    PlayerEntity opponentPlayer;
+    long lastTick; // Helper variable for physics engine
 
     int GAME_WIDTH = 571;
     int GAME_HEIGHT = 600;
 
-    public GamePanel(){
+    private NetworkManager networkManager;
+
+    public GamePanel() {
         super();
         this.setFocusable(true);
-        this.requestFocus();
+        this.requestFocusInWindow();
         this.setPreferredSize(new Dimension(800, 600));
-        // Spawn player
-        this.ctx.tanks.add(new PlayerEntity("./data/greentank.png"));
-        this.player = this.ctx.tanks.get(0);
-        this.player.physVecs.add(new float[] {0,0});
+
+        // Initialize player
+        player = new PlayerEntity("./data/greentank.png");
+        ctx.tanks.add(player);
+        player.physVecs.add(new float[]{0, 0});
         player.x = 100;
         player.y = 100;
+
+        // Initialize opponent player (will be updated upon receiving data)
+        opponentPlayer = new PlayerEntity("./data/greentank.png");
+        ctx.opponentPlayer = opponentPlayer;
+        ctx.tanks.add(opponentPlayer);
 
         // Listen for inputs
         this.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
-                super.keyPressed(e);
                 player.heldKeys.add(e.getKeyCode());
             }
 
             @Override
             public void keyReleased(KeyEvent e) {
-                super.keyReleased(e);
                 player.heldKeys.remove(e.getKeyCode());
             }
         });
-        // Schedule physics engine to run every N seconds
-        ActionListener action = new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                physUpdate();
-            }
-        };
-        // Schedule physics engine to run  10 microseconds
-        Timer physTimer = new Timer(10, action);
+
+        // Schedule physics engine to run every 10 milliseconds
+        Timer physTimer = new Timer(10, e -> physUpdate());
         physTimer.start();
     }
+
+    public void setNetworkManager(NetworkManager networkManager) {
+        this.networkManager = networkManager;
+
+        // Start listening for incoming messages
+        new Thread(() -> {
+            while (true) {
+                try {
+                    Object message = networkManager.receiveMessage();
+                    if (message instanceof GameStateUpdate) {
+                        GameStateUpdate update = (GameStateUpdate) message;
+                        updateOpponentPlayer(update);
+                    } else if (message instanceof BulletFiredMessage) {
+                        BulletFiredMessage bulletMsg = (BulletFiredMessage) message;
+                        spawnOpponentBullet(bulletMsg);
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+    }
+
+    // Update the opponent player's state
+    private void updateOpponentPlayer(GameStateUpdate update) {
+        opponentPlayer.x = update.x;
+        opponentPlayer.y = update.y;
+        opponentPlayer.angle = update.angle;
+        repaint();
+    }
+
+    // Spawn opponent's bullet
+    private void spawnOpponentBullet(BulletFiredMessage bulletMsg) {
+        BulletEntity bullet = new BulletEntity();
+        bullet.x = bulletMsg.x;
+        bullet.y = bulletMsg.y;
+        bullet.angle = bulletMsg.angle;
+        bullet.physVecs.add(new float[]{(float) Math.sin(Math.toRadians(bullet.angle)) * 10,
+                (float) -Math.cos(Math.toRadians(bullet.angle)) * 10});
+        ctx.bullets.add(bullet);
+        repaint();
+    }
+
     // Render the game
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         var g2d = (Graphics2D) g;
+
         // Render the tanks
         for (var entity : this.ctx.tanks) {
+            if (entity.isDestroyed) continue;
             BufferedImage sprite = entity.getSprite();
             double angle = Math.toRadians(entity.angle);
 
             // Scale the sprite
-            BufferedImage scaledSprite = new BufferedImage(entity.width, entity.height, sprite.getType());
+            BufferedImage scaledSprite = new BufferedImage(entity.width, entity.height, BufferedImage.TYPE_INT_ARGB);
             Graphics2D g2dScaled = scaledSprite.createGraphics();
             g2dScaled.drawImage(sprite, 0, 0, entity.width, entity.height, null);
             g2dScaled.dispose();
 
-            // New values after rotation occurs
-            double sin = Math.abs(Math.sin(angle));
-            double cos = Math.abs(Math.cos(angle));
-            int newWidth = (int) Math.floor(entity.width * cos + entity.height * sin);
-            int newHeight = (int) Math.floor(entity.height * cos + entity.width * sin);
+            // Rotate the sprite
+            AffineTransform transform = new AffineTransform();
+            transform.translate(entity.x - entity.width / 2.0, entity.y - entity.height / 2.0);
+            transform.rotate(angle, entity.width / 2.0, entity.height / 2.0);
 
-            // Create rotated version of sprite
-            BufferedImage rotated = new BufferedImage(newWidth, newHeight, sprite.getType());
-            Graphics2D g2dRotated = rotated.createGraphics();
-            AffineTransform rotation = new AffineTransform();
-            rotation.rotate(angle, entity.width / 2.0, entity.height / 2.0);
-            g2dRotated.drawRenderedImage(scaledSprite, rotation);
-
-            // Draw the transformed image
-            g2d.drawImage(rotated, (int) Math.floor(entity.x - (double) entity.width /2), (int) Math.floor(entity.y - (double) entity.height /2), null);
+            g2d.drawImage(scaledSprite, transform, null);
         }
-        for(var bullet : this.ctx.bullets){
+
+        // Render the bullets
+        for (var bullet : this.ctx.bullets) {
             BufferedImage sprite = bullet.getSprite();
             double angle = Math.toRadians(bullet.angle);
 
             // Scale the sprite
-            BufferedImage scaledSprite = new BufferedImage(bullet.width, bullet.height, sprite.getType());
+            BufferedImage scaledSprite = new BufferedImage(bullet.width, bullet.height, BufferedImage.TYPE_INT_ARGB);
             Graphics2D g2dScaled = scaledSprite.createGraphics();
             g2dScaled.drawImage(sprite, 0, 0, bullet.width, bullet.height, null);
             g2dScaled.dispose();
 
-            // New values after rotation occurs
-            double sin = Math.abs(Math.sin(angle));
-            double cos = Math.abs(Math.cos(angle));
-            int newWidth = (int) Math.floor(bullet.width * cos + bullet.height * sin);
-            int newHeight = (int) Math.floor(bullet.height * cos + bullet.width * sin);
+            // Rotate the sprite
+            AffineTransform transform = new AffineTransform();
+            transform.translate(bullet.x - bullet.width / 2.0, bullet.y - bullet.height / 2.0);
+            transform.rotate(angle, bullet.width / 2.0, bullet.height / 2.0);
 
-            // Create rotated version of sprite
-            BufferedImage rotated = new BufferedImage(newWidth, newHeight, sprite.getType());
-            Graphics2D g2dRotated = rotated.createGraphics();
-            AffineTransform rotation = new AffineTransform();
-            rotation.rotate(angle, bullet.width / 2.0, bullet.height / 2.0);
-            g2dRotated.drawRenderedImage(scaledSprite, rotation);
-
-            // Draw the transformed image
-            g2d.drawImage(rotated, (int) Math.floor(bullet.x - (double) bullet.width /2), (int) Math.floor(bullet.y - (double) bullet.height /2), null);
+            g2d.drawImage(scaledSprite, transform, null);
         }
+
         // Draw the border
         g2d.setStroke(new BasicStroke(5));
         g2d.drawRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
     }
 
-    private void physUpdate(){
-        //Process player inputs
-        for(var player : ctx.tanks){
+    private void physUpdate() {
+        // Process player inputs
+        for (var player : ctx.tanks) {
+            if (player.isDestroyed) continue;
             var angle = Math.toRadians(player.angle);
             double playerSpeed = 1.2;
 
-            for(Integer key : player.heldKeys){
-                if(key == KeyEvent.VK_RIGHT) {
+            for (Integer key : player.heldKeys) {
+                if (key == KeyEvent.VK_RIGHT) {
                     player.rotationVec = 1.0f;
                 }
-                if(key == KeyEvent.VK_LEFT) {
+                if (key == KeyEvent.VK_LEFT) {
                     player.rotationVec = -1.0f;
                 }
-                if(key == KeyEvent.VK_UP){
+                if (key == KeyEvent.VK_UP) {
                     player.movementVec[0] = (float) (playerSpeed);
                     player.movementVec[1] = (float) (playerSpeed * -1);
                 }
-                if(key == KeyEvent.VK_DOWN){
+                if (key == KeyEvent.VK_DOWN) {
                     player.movementVec[0] = (float) (playerSpeed * -1);
                     player.movementVec[1] = (float) (playerSpeed);
                 }
-                if(key == KeyEvent.VK_SPACE){
+                if (key == KeyEvent.VK_SPACE) {
                     // Spawn a bullet
-                    ctx.bullets.add(new BulletEntity());
-                    var bullet = ctx.bullets.get(ctx.bullets.size()-1);
+                    BulletEntity bullet = new BulletEntity();
                     bullet.x = player.x;
                     bullet.y = player.y;
                     bullet.angle = player.angle;
                     var bulletSpeed = 10;
-                    bullet.physVecs.add(new float[] {(float)bulletSpeed,(float)-1 * bulletSpeed});
+                    bullet.physVecs.add(new float[]{
+                            (float) Math.sin(Math.toRadians(bullet.angle)) * bulletSpeed,
+                            (float) -Math.cos(Math.toRadians(bullet.angle)) * bulletSpeed
+                    });
+                    ctx.bullets.add(bullet);
+
+                    // Send bullet fired message
+                    if (networkManager != null) {
+                        BulletFiredMessage bulletMsg = new BulletFiredMessage(bullet.x, bullet.y, bullet.angle);
+                        try {
+                            networkManager.sendMessage(bulletMsg);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
                 }
             }
-
         }
-        if(this.lastTick == 0){
+
+        if (this.lastTick == 0) {
             this.lastTick = System.currentTimeMillis();
         }
+
         // Physics engine...
         double FRICTION_COEFFICIENT = 0.95;
         double STOP_POINT = 0.6;
@@ -163,22 +207,21 @@ public class GamePanel extends JPanel{
         long curTime = System.currentTimeMillis();
         long delta = curTime - lastTick;
         lastTick = curTime;
-        float moveAmount = (float) delta/6;
+        float moveAmount = (float) delta / 6;
 
-        for (int i = this.ctx.tanks.size() - 1 + this.ctx.bullets.size(); i >= 0; i--){
+        for (int i = this.ctx.tanks.size() - 1 + this.ctx.bullets.size(); i >= 0; i--) {
             Entity entity;
-            if(i < ctx.tanks.size()){
+            if (i < ctx.tanks.size()) {
                 entity = ctx.tanks.get(i);
-            }
-            else{
+            } else {
                 entity = ctx.bullets.get(i - ctx.tanks.size());
             }
             var sin = Math.sin(Math.toRadians(entity.angle));
             var cos = Math.cos(Math.toRadians(entity.angle));
-            if(entity.rotationVec != 0){
+            if (entity.rotationVec != 0) {
                 entity.angle += moveAmount * entity.rotationVec;
                 entity.rotationVec *= (float) FRICTION_COEFFICIENT;
-                if(Math.abs(entity.rotationVec) < STOP_POINT )
+                if (Math.abs(entity.rotationVec) < STOP_POINT)
                     entity.rotationVec = 0;
                 entity.angle %= 360;
             }
@@ -190,9 +233,9 @@ public class GamePanel extends JPanel{
                 float magnitude = Math.abs(vec[0]) + Math.abs(vec[1]);
                 entity.physVecs.get(j)[0] *= (float) FRICTION_COEFFICIENT;
                 entity.physVecs.get(j)[1] *= (float) FRICTION_COEFFICIENT;
-                if(magnitude < STOP_POINT){
-                    if(entity instanceof PlayerEntity){
-                        if(entity.physVecs.get(j) == ((PlayerEntity)entity).movementVec){
+                if (magnitude < STOP_POINT) {
+                    if (entity instanceof PlayerEntity) {
+                        if (entity.physVecs.get(j) == ((PlayerEntity) entity).movementVec) {
                             continue;
                         }
                     }
@@ -200,26 +243,40 @@ public class GamePanel extends JPanel{
                 }
             }
             // Clamp position within the map
-            if(entity.x < 0 || entity.x > GAME_WIDTH || entity.y < 0 || entity.y > GAME_HEIGHT){
-                if(entity instanceof BulletEntity){
-                    for(int j = 0; j < entity.physVecs.size(); j++){
-                        var vec = entity.physVecs.get(j);
-                    }
-                    entity.angle = (entity.angle + 270) % 360;
+            if (entity.x < 0 || entity.x > GAME_WIDTH || entity.y < 0 || entity.y > GAME_HEIGHT) {
+                if (entity instanceof BulletEntity) {
+                    // Remove bullet if it goes out of bounds
+                    ctx.bullets.remove(entity);
                 }
-                if(entity instanceof PlayerEntity){
+                if (entity instanceof PlayerEntity) {
                     entity.x = Math.max(entity.x, 0);
                     entity.x = Math.min(entity.x, GAME_WIDTH);
                     entity.y = Math.max(entity.y, 0);
                     entity.y = Math.min(entity.y, GAME_HEIGHT);
                 }
             }
-            // TODO: Check for collisions
-            // Bullet Cleanup
-            if(entity instanceof BulletEntity && (entity.physVecs.isEmpty())){
-                ctx.bullets.remove(entity);
+            // Check for collisions
+            if (entity instanceof BulletEntity) {
+                for (var tank : ctx.tanks) {
+                    if (tank != player && !tank.isDestroyed && entity.checkCollision(tank)) {
+                        tank.isDestroyed = true;
+                        ctx.bullets.remove(entity);
+                        break;
+                    }
+                }
             }
         }
-        super.repaint();
+
+        // Send player's state to opponent
+        if (networkManager != null) {
+            GameStateUpdate update = new GameStateUpdate(player.x, player.y, player.angle);
+            try {
+                networkManager.sendMessage(update);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        repaint();
     }
 }

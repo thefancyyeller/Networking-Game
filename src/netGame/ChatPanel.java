@@ -1,14 +1,18 @@
 package netGame;
+
 import javax.swing.*;
 import javax.swing.border.Border;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.event.*;
+import java.io.IOException;
 
 public class ChatPanel extends JPanel {
     public JTextArea chatArea;
     public JScrollPane scrollPane;
     public JTextField chatInput;
+
+    private GamePanel gamePanel;
+    private NetworkManager networkManager;
 
     public ChatPanel() {
         // Creates chat components
@@ -27,6 +31,21 @@ public class ChatPanel extends JPanel {
                 if (!message.isEmpty()) {
                     chatArea.append("You: " + message + "\n");
                     chatInput.setText("");
+
+                    // Send chat message
+                    if (networkManager != null) {
+                        ChatMessage chatMsg = new ChatMessage(message);
+                        try {
+                            networkManager.sendMessage(chatMsg);
+                        } catch (IOException ex) {
+                            ex.printStackTrace();
+                        }
+                    }
+
+                    // Request focus back to the game panel
+                    if (gamePanel != null) {
+                        gamePanel.requestFocusInWindow();
+                    }
                 }
             }
         });
@@ -34,12 +53,28 @@ public class ChatPanel extends JPanel {
         // Adds components to chatPanel
         this.add(scrollPane, BorderLayout.CENTER);
         this.add(chatInput, BorderLayout.SOUTH);
-        this.add(new JLabel("Hello, world!"), BorderLayout.NORTH);
     }
-    public void onMessageGet(String message){
-        System.out.println("We just got a message: " + message);
+
+    public void setGamePanel(GamePanel gamePanel) {
+        this.gamePanel = gamePanel;
     }
-    public void callMeToSendAMessage(String message){
-        System.out.println("You just sent a message: " + message);
+
+    public void setNetworkManager(NetworkManager networkManager) {
+        this.networkManager = networkManager;
+
+        // Start listening for incoming chat messages
+        new Thread(() -> {
+            while (true) {
+                try {
+                    Object message = networkManager.receiveMessage();
+                    if (message instanceof ChatMessage) {
+                        ChatMessage chatMsg = (ChatMessage) message;
+                        chatArea.append("Opponent: " + chatMsg.message + "\n");
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
     }
 }
