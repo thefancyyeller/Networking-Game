@@ -6,8 +6,6 @@ import java.awt.event.*;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.util.HashSet;
-import java.util.Set;
 
 public class GamePanel extends JPanel {
     WorldContext ctx = new WorldContext();
@@ -19,15 +17,18 @@ public class GamePanel extends JPanel {
     int GAME_HEIGHT = 600;
 
     private NetworkManager networkManager;
+    private boolean isHost;
 
-    public GamePanel() {
+    public GamePanel(boolean isHost) {
         super();
+        this.isHost = isHost;
         this.setFocusable(true);
         this.requestFocusInWindow();
         this.setPreferredSize(new Dimension(800, 600));
 
         // Initialize player
         player = new PlayerEntity("./data/greentank.png");
+        player.id = isHost ? 1 : 2; // Assign fixed IDs
         ctx.tanks.add(player);
         player.physVecs.add(new float[]{0, 0});
         player.x = 100;
@@ -35,6 +36,7 @@ public class GamePanel extends JPanel {
 
         // Initialize opponent player (will be updated upon receiving data)
         opponentPlayer = new PlayerEntity("./data/greentank.png");
+        opponentPlayer.id = isHost ? 2 : 1; // Assign fixed IDs
         ctx.opponentPlayer = opponentPlayer;
         ctx.tanks.add(opponentPlayer);
 
@@ -67,9 +69,14 @@ public class GamePanel extends JPanel {
                     if (message instanceof GameStateUpdate) {
                         GameStateUpdate update = (GameStateUpdate) message;
                         updateOpponentPlayer(update);
-                    } else if (message instanceof BulletFiredMessage) {
+                    }
+                    if (message instanceof BulletFiredMessage) {
                         BulletFiredMessage bulletMsg = (BulletFiredMessage) message;
-                        spawnOpponentBullet(bulletMsg);
+                        SwingUtilities.invokeLater(() -> spawnOpponentBullet(bulletMsg));
+                    }
+                    if (message instanceof TankDestroyedMessage) {
+                        TankDestroyedMessage destroyedMsg = (TankDestroyedMessage) message;
+                        SwingUtilities.invokeLater(() -> handleTankDestroyed(destroyedMsg));
                     }
                 } catch (InterruptedException e) {
                     e.printStackTrace();
@@ -97,6 +104,19 @@ public class GamePanel extends JPanel {
         ctx.bullets.add(bullet);
         repaint();
     }
+
+    private void handleTankDestroyed(TankDestroyedMessage msg) {
+        // Find the tank with the given ID and mark it as destroyed
+        for (PlayerEntity tank : ctx.tanks) {
+            if (tank.id == msg.tankId) {
+                tank.isDestroyed = true;
+                break;
+            }
+        }
+        repaint();
+    }
+
+
 
     // Render the game
     @Override
@@ -261,10 +281,21 @@ public class GamePanel extends JPanel {
                     if (tank != player && !tank.isDestroyed && entity.checkCollision(tank)) {
                         tank.isDestroyed = true;
                         ctx.bullets.remove(entity);
+
+                        // Send TankDestroyedMessage to opponent
+                        if (networkManager != null) {
+                            TankDestroyedMessage destroyedMsg = new TankDestroyedMessage(tank.id);
+                            try {
+                                networkManager.sendMessage(destroyedMsg);
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
                         break;
                     }
                 }
             }
+
         }
 
         // Send player's state to opponent

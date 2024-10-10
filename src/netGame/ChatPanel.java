@@ -69,7 +69,9 @@ public class ChatPanel extends JPanel {
                     Object message = networkManager.receiveMessage();
                     if (message instanceof ChatMessage) {
                         ChatMessage chatMsg = (ChatMessage) message;
-                        chatArea.append("Opponent: " + chatMsg.message + "\n");
+                        SwingUtilities.invokeLater(() -> {
+                            chatArea.append("Opponent: " + chatMsg.message + "\n");
+                        });
                     }
                 } catch (InterruptedException e) {
                     e.printStackTrace();

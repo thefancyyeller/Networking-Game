@@ -41,8 +41,10 @@ public class NetworkManager {
 
     private void initializeStreams() throws IOException {
         out = new ObjectOutputStream(socket.getOutputStream());
+        out.flush();
         in = new ObjectInputStream(socket.getInputStream());
     }
+
 
     private void startListening() {
         new Thread(() -> {
@@ -59,11 +61,15 @@ public class NetworkManager {
 
     public void sendMessage(Object message) throws IOException {
         out.writeObject(message);
-        out.flush(); // Ensure the message is sent immediately
+        out.flush();
+        System.out.println("Sent message: " + message.getClass().getSimpleName() + " - " + message);
     }
 
+
     public Object receiveMessage() throws InterruptedException {
-        return messageQueue.take();
+        Object message = messageQueue.take();
+        System.out.println("Received message: " + message.getClass().getSimpleName() + " - " + message);
+        return message;
     }
 
     public void close() throws IOException {
