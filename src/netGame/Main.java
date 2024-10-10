@@ -28,31 +28,31 @@ public class Main {
         // Initialize the NetworkManager
         NetworkManager networkManager = new NetworkManager();
 
-        try {
-            // Decide whether this client is the server or the client
-            // For simplicity, you can use command-line arguments or a dialog box
-            String[] options = {"Host Game", "Join Game"};
-            int choice = JOptionPane.showOptionDialog(frame,
-                    "Do you want to host or join a game?",
-                    "Network Setup",
-                    JOptionPane.YES_NO_OPTION,
-                    JOptionPane.QUESTION_MESSAGE,
-                    null,
-                    options,
-                    options[0]);
+        // Decide whether this client is the server or the client
+        String[] options = {"Host Game", "Join Game"};
+        int choice = JOptionPane.showOptionDialog(frame,
+                "Do you want to host or join a game?",
+                "Network Setup",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE,
+                null,
+                options,
+                options[0]);
 
-            if (choice == JOptionPane.YES_OPTION) {
-                // Host Game
-                networkManager.startServer(12345);
-            } else {
-                // Join Game
-                String serverIP = JOptionPane.showInputDialog(frame, "Enter server IP address:");
+        if (choice == JOptionPane.YES_OPTION) {
+            // Host Game
+            networkManager.startServer(12345);
+            JOptionPane.showMessageDialog(frame, "Hosting game... Waiting for opponent to join.");
+        } else {
+            // Join Game
+            String serverIP = JOptionPane.showInputDialog(frame, "Enter server IP address:");
+            try {
                 networkManager.startClient(serverIP, 12345);
+            } catch (IOException e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(frame, "Network Error: " + e.getMessage());
+                System.exit(1);
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-            JOptionPane.showMessageDialog(frame, "Network Error: " + e.getMessage());
-            System.exit(1);
         }
 
         // Pass the NetworkManager to the panels
