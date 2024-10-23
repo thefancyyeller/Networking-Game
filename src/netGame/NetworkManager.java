@@ -6,12 +6,15 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import javax.swing.SwingUtilities;
 import javax.swing.JOptionPane;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 
 public class NetworkManager {
     private Socket socket;
     private ObjectOutputStream out;
     private ObjectInputStream in;
     private BlockingQueue<Object> messageQueue = new LinkedBlockingQueue<>();
+    private CopyOnWriteArrayList<Consumer<Object>> listeners = new CopyOnWriteArrayList<>();
 
     public void startServer(int port) {
         new Thread(() -> {
@@ -35,8 +38,13 @@ public class NetworkManager {
 
     public void startClient(String host, int port) throws IOException {
         socket = new Socket(host, port);
+        System.out.println("Connected to server.");
         initializeStreams();
         startListening();
+    }
+
+    public void addMessageListener(Consumer<Object> listener) {
+        listeners.add(listener);
     }
 
     private void initializeStreams() throws IOException {
@@ -51,7 +59,11 @@ public class NetworkManager {
             try {
                 Object message;
                 while ((message = in.readObject()) != null) {
-                    messageQueue.add(message);
+                    System.out.println("Received message from input stream: " + message.getClass().getSimpleName() + " - " + message.toString());
+                    for (Consumer<Object> listener : listeners) {
+                        listener.accept(message);
+                    }
+                   // messageQueue.add(message);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -59,18 +71,23 @@ public class NetworkManager {
         }).start();
     }
 
-    public void sendMessage(Object message) throws IOException {
-        out.writeObject(message);
-        out.flush();
-        System.out.println("Sent message: " + message.getClass().getSimpleName() + " - " + message);
+    public void sendMessage(Object message) {
+        try {
+            out.writeObject(message);
+            out.flush();
+            System.out.println("Sent message: " + message.getClass().getSimpleName());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
 
-    public Object receiveMessage() throws InterruptedException {
-        Object message = messageQueue.take();
-        System.out.println("Received message: " + message.getClass().getSimpleName() + " - " + message);
-        return message;
-    }
+
+    // public Object receiveMessage() throws InterruptedException {
+    //    Object message = messageQueue.take();
+     //   System.out.println("Received message: " + message.getClass().getSimpleName() + " - " + message.toString());
+    //    return message;
+    //}
 
     public void close() throws IOException {
         in.close();

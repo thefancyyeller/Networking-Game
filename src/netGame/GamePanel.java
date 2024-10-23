@@ -61,29 +61,20 @@ public class GamePanel extends JPanel {
     public void setNetworkManager(NetworkManager networkManager) {
         this.networkManager = networkManager;
 
-        // Start listening for incoming messages
-        new Thread(() -> {
-            while (true) {
-                try {
-                    Object message = networkManager.receiveMessage();
-                    if (message instanceof GameStateUpdate) {
-                        GameStateUpdate update = (GameStateUpdate) message;
-                        updateOpponentPlayer(update);
-                    }
-                    if (message instanceof BulletFiredMessage) {
-                        BulletFiredMessage bulletMsg = (BulletFiredMessage) message;
-                        SwingUtilities.invokeLater(() -> spawnOpponentBullet(bulletMsg));
-                    }
-                    if (message instanceof TankDestroyedMessage) {
-                        TankDestroyedMessage destroyedMsg = (TankDestroyedMessage) message;
-                        SwingUtilities.invokeLater(() -> handleTankDestroyed(destroyedMsg));
-                    }
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+        networkManager.addMessageListener(message -> {
+            if (message instanceof GameStateUpdate) {
+                GameStateUpdate update = (GameStateUpdate) message;
+                SwingUtilities.invokeLater(() -> updateOpponentPlayer(update));
+            } else if (message instanceof BulletFiredMessage) {
+                BulletFiredMessage bulletMsg = (BulletFiredMessage) message;
+                SwingUtilities.invokeLater(() -> spawnOpponentBullet(bulletMsg));
+            } else if (message instanceof TankDestroyedMessage) {
+                TankDestroyedMessage destroyedMsg = (TankDestroyedMessage) message;
+                SwingUtilities.invokeLater(() -> handleTankDestroyed(destroyedMsg));
             }
-        }).start();
+        });
     }
+
 
     // Update the opponent player's state
     private void updateOpponentPlayer(GameStateUpdate update) {
@@ -206,11 +197,8 @@ public class GamePanel extends JPanel {
                     // Send bullet fired message
                     if (networkManager != null) {
                         BulletFiredMessage bulletMsg = new BulletFiredMessage(bullet.x, bullet.y, bullet.angle);
-                        try {
-                            networkManager.sendMessage(bulletMsg);
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
+                        networkManager.sendMessage(bulletMsg);
+
                     }
                 }
             }
@@ -285,11 +273,8 @@ public class GamePanel extends JPanel {
                         // Send TankDestroyedMessage to opponent
                         if (networkManager != null) {
                             TankDestroyedMessage destroyedMsg = new TankDestroyedMessage(tank.id);
-                            try {
-                                networkManager.sendMessage(destroyedMsg);
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            }
+                            networkManager.sendMessage(destroyedMsg);
+
                         }
                         break;
                     }
@@ -301,11 +286,8 @@ public class GamePanel extends JPanel {
         // Send player's state to opponent
         if (networkManager != null) {
             GameStateUpdate update = new GameStateUpdate(player.x, player.y, player.angle);
-            try {
-                networkManager.sendMessage(update);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            networkManager.sendMessage(update);
+
         }
 
         repaint();

@@ -35,11 +35,7 @@ public class ChatPanel extends JPanel {
                     // Send chat message
                     if (networkManager != null) {
                         ChatMessage chatMsg = new ChatMessage(message);
-                        try {
-                            networkManager.sendMessage(chatMsg);
-                        } catch (IOException ex) {
-                            ex.printStackTrace();
-                        }
+                        networkManager.sendMessage(chatMsg);
                     }
 
                     // Request focus back to the game panel
@@ -62,21 +58,14 @@ public class ChatPanel extends JPanel {
     public void setNetworkManager(NetworkManager networkManager) {
         this.networkManager = networkManager;
 
-        // Start listening for incoming chat messages
-        new Thread(() -> {
-            while (true) {
-                try {
-                    Object message = networkManager.receiveMessage();
-                    if (message instanceof ChatMessage) {
-                        ChatMessage chatMsg = (ChatMessage) message;
-                        SwingUtilities.invokeLater(() -> {
-                            chatArea.append("Opponent: " + chatMsg.message + "\n");
-                        });
-                    }
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+        networkManager.addMessageListener(message -> {
+            if (message instanceof ChatMessage) {
+                ChatMessage chatMsg = (ChatMessage) message;
+                SwingUtilities.invokeLater(() -> {
+                    chatArea.append("Opponent: " + chatMsg.message + "\n");
+                });
             }
-        }).start();
+        });
     }
+
 }
