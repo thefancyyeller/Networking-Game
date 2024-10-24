@@ -53,6 +53,13 @@ public class GamePanel extends JPanel {
             }
         });
 
+        this.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                requestFocusInWindow();
+            }
+        });
+
         // Schedule physics engine to run every 10 milliseconds
         Timer physTimer = new Timer(10, e -> physUpdate());
         physTimer.start();
