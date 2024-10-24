@@ -97,8 +97,11 @@ public class GamePanel extends JPanel {
         bullet.x = bulletMsg.x;
         bullet.y = bulletMsg.y;
         bullet.angle = bulletMsg.angle;
-        bullet.physVecs.add(new float[]{(float) Math.sin(Math.toRadians(bullet.angle)) * 10,
-                (float) -Math.cos(Math.toRadians(bullet.angle)) * 10});
+        float bulletSpeed = 10;
+        bullet.physVecs.add(new float[]{
+                (float) Math.sin(Math.toRadians(bullet.angle)) * bulletSpeed,
+                (float) -Math.cos(Math.toRadians(bullet.angle)) * bulletSpeed
+        });
         ctx.bullets.add(bullet);
         repaint();
     }
@@ -181,12 +184,16 @@ public class GamePanel extends JPanel {
                     player.rotationVec = -1.0f;
                 }
                 if (key == KeyEvent.VK_UP) {
-                    player.movementVec[0] = (float) (playerSpeed);
-                    player.movementVec[1] = (float) (playerSpeed * -1);
+                    float speed = 1.2f;
+                    float angleRad = (float) Math.toRadians(player.angle);
+                    player.movementVec[0] = (float) Math.sin(angleRad) * speed;
+                    player.movementVec[1] = (float) -Math.cos(angleRad) * speed;
                 }
                 if (key == KeyEvent.VK_DOWN) {
-                    player.movementVec[0] = (float) (playerSpeed * -1);
-                    player.movementVec[1] = (float) (playerSpeed);
+                    float speed = -1.2f;
+                    float angleRad = (float) Math.toRadians(player.angle);
+                    player.movementVec[0] = (float) Math.sin(angleRad) * speed;
+                    player.movementVec[1] = (float) -Math.cos(angleRad) * speed;
                 }
                 if (key == KeyEvent.VK_SPACE) {
                     // Spawn a bullet
@@ -243,8 +250,8 @@ public class GamePanel extends JPanel {
             // Process all phys vectors on each entity
             for (int j = entity.physVecs.size() - 1; j >= 0; j--) {
                 float[] vec = entity.physVecs.get(j).clone();
-                entity.x += (float) (moveAmount * vec[0] * sin);
-                entity.y += (float) (moveAmount * vec[1] * cos);
+                entity.x += (float) (moveAmount * vec[0]);
+                entity.y += (float) (moveAmount * vec[1]);
                 float magnitude = Math.abs(vec[0]) + Math.abs(vec[1]);
                 entity.physVecs.get(j)[0] *= (float) FRICTION_COEFFICIENT;
                 entity.physVecs.get(j)[1] *= (float) FRICTION_COEFFICIENT;
