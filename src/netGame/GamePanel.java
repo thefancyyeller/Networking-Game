@@ -94,12 +94,12 @@ public class GamePanel extends JPanel {
                         SwingUtilities.invokeLater(() -> {
                             BulletFiredMessage bulletMsg = (BulletFiredMessage) message;
                             BulletEntity bullet = new BulletEntity();
-                            ctx.bullets.add(bullet);
                             bullet.x = bulletMsg.x;
                             bullet.y = bulletMsg.y;
                             bullet.angle = bulletMsg.angle;
                             var bulletSpeed = 10;
                             bullet.physVecs.add(new float[] {(float)bulletSpeed,(float)-1 * bulletSpeed});
+                            ctx.bullets.add(bullet);
                             System.out.println("Bullet message recieved");
                             repaint();
                         });
