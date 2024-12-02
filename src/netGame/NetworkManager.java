@@ -22,11 +22,6 @@ public class NetworkManager {
                 System.out.println("Client connected.");
                 initializeStreams();
                 startListening();
-
-                // Inform the user that the client has connected
-                SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(null, "Opponent has joined the game!");
-                });
             } catch (IOException e) {
                 e.printStackTrace();
             }

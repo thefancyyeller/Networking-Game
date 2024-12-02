@@ -6,10 +6,12 @@ import java.awt.event.*;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.util.Vector;
 
 public class GamePanel extends JPanel {
     WorldContext ctx = new WorldContext();
     PlayerEntity ctrlPlayer;
+    Vector<BulletFiredMessage> bulletMessages = new Vector<>();
     long lastTick; // Helper variable for physics engine
 
     int GAME_WIDTH = 571;
@@ -18,7 +20,7 @@ public class GamePanel extends JPanel {
     private NetworkManager networkManager;
     private boolean isHost;
     private long lastBullet = 0;
-    private long mpb = 5000;
+    private long mpb = 500;
 
     public GamePanel(boolean isHost) {
         super();
@@ -63,7 +65,7 @@ public class GamePanel extends JPanel {
         });
 
         // Schedule physics engine to run every 10 milliseconds
-        Timer physTimer = new Timer(10, e -> physUpdate());
+        Timer physTimer = new Timer(5, e -> physUpdate());
         physTimer.start();
     }
 
@@ -89,16 +91,7 @@ public class GamePanel extends JPanel {
                         updatedPlayer.angle = update.angle;
                     }
                     if (message instanceof BulletFiredMessage) {
-                        BulletFiredMessage bulletMsg = (BulletFiredMessage) message;
-                        BulletEntity bullet = new BulletEntity();
-                        ctx.bullets.add(bullet);
-                        bullet.x = bulletMsg.x;
-                        bullet.y = bulletMsg.y;
-                        bullet.angle = bulletMsg.angle;
-                        var bulletSpeed = 10;
-                        bullet.physVecs.add(new float[] {(float)bulletSpeed,(float)-1 * bulletSpeed});
-                        repaint();
-                        System.out.println("Bullet message recieved");
+                        bulletMessages.add((BulletFiredMessage) message);
                     }
                     if (message instanceof TankDestroyedMessage) {
                         if(isHost)
@@ -112,17 +105,6 @@ public class GamePanel extends JPanel {
             }
         }).start();
     }
-
-    private void handleTankDestroyed(TankDestroyedMessage msg) {
-        if(isHost){
-            ctx.opponentPlayer.isDestroyed = true;
-        }
-        else
-            ctx.player.isDestroyed = true;
-        repaint();
-    }
-
-
 
     // Render the game
     @Override
@@ -175,6 +157,18 @@ public class GamePanel extends JPanel {
     }
 
     private void physUpdate() {
+        for(BulletFiredMessage bulletMsg : bulletMessages){
+            BulletEntity bullet = new BulletEntity();
+            ctx.bullets.add(bullet);
+            bullet.x = bulletMsg.x;
+            bullet.y = bulletMsg.y;
+            bullet.angle = bulletMsg.angle;
+            var bulletSpeed = 10;
+            bullet.physVecs.add(new float[] {(float)bulletSpeed,(float)-1 * bulletSpeed});
+            System.out.println("Bullet message recieved");
+            repaint();
+        }
+        bulletMessages.clear();
         // Process player inputs
         for (var player : ctx.tanks) {
             var angle = Math.toRadians(player.angle);
