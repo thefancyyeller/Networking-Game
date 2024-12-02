@@ -9,8 +9,7 @@ import java.io.IOException;
 
 public class GamePanel extends JPanel {
     WorldContext ctx = new WorldContext();
-    PlayerEntity player;
-    PlayerEntity opponentPlayer;
+    PlayerEntity ctrlPlayer;
     long lastTick; // Helper variable for physics engine
 
     int GAME_WIDTH = 571;
@@ -18,6 +17,8 @@ public class GamePanel extends JPanel {
 
     private NetworkManager networkManager;
     private boolean isHost;
+    private long lastBullet = 0;
+    private long mpb = 5000;
 
     public GamePanel(boolean isHost) {
         super();
@@ -26,30 +27,38 @@ public class GamePanel extends JPanel {
         this.requestFocusInWindow();
         this.setPreferredSize(new Dimension(800, 600));
 
-        // Initialize player
-        player = new PlayerEntity("./data/greentank.png");
-        player.id = isHost ? 1 : 2; // Assign fixed IDs
+        // Initialize players
+        PlayerEntity player = new PlayerEntity("./data/greentank.png");
         ctx.tanks.add(player);
         player.physVecs.add(new float[]{0, 0});
         player.x = 100;
         player.y = 100;
 
         // Initialize opponent player (will be updated upon receiving data)
-        opponentPlayer = new PlayerEntity("./data/greentank.png");
-        opponentPlayer.id = isHost ? 2 : 1; // Assign fixed IDs
+        PlayerEntity opponentPlayer = new PlayerEntity("./data/redtank.png");
         ctx.opponentPlayer = opponentPlayer;
         ctx.tanks.add(opponentPlayer);
+
+        ctx.player = player;
+        ctx.opponentPlayer = opponentPlayer;
+
+        if(isHost) {
+            ctrlPlayer = player;
+        }
+        else{
+            ctrlPlayer = opponentPlayer;
+        }
 
         // Listen for inputs
         this.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
-                player.heldKeys.add(e.getKeyCode());
+                ctrlPlayer.heldKeys.add(e.getKeyCode());
             }
 
             @Override
             public void keyReleased(KeyEvent e) {
-                player.heldKeys.remove(e.getKeyCode());
+                ctrlPlayer.heldKeys.remove(e.getKeyCode());
             }
         });
 
@@ -67,16 +76,35 @@ public class GamePanel extends JPanel {
                 try {
                     Object message = networkManager.receiveMessage();
                     if (message instanceof GameStateUpdate) {
+                        // Process entity moves
                         GameStateUpdate update = (GameStateUpdate) message;
-                        updateOpponentPlayer(update);
+                        PlayerEntity updatedPlayer;
+                        if(isHost){
+                            updatedPlayer = ctx.opponentPlayer;
+                        }
+                        else
+                            updatedPlayer = ctx.player;
+                        updatedPlayer.x = update.x;
+                        updatedPlayer.y = update.y;
+                        updatedPlayer.angle = update.angle;
                     }
                     if (message instanceof BulletFiredMessage) {
                         BulletFiredMessage bulletMsg = (BulletFiredMessage) message;
-                        SwingUtilities.invokeLater(() -> spawnOpponentBullet(bulletMsg));
+                        BulletEntity bullet = new BulletEntity();
+                        ctx.bullets.add(bullet);
+                        bullet.x = bulletMsg.x;
+                        bullet.y = bulletMsg.y;
+                        bullet.angle = bulletMsg.angle;
+                        var bulletSpeed = 10;
+                        bullet.physVecs.add(new float[] {(float)bulletSpeed,(float)-1 * bulletSpeed});
+                        repaint();
+                        System.out.println("Bullet message recieved");
                     }
                     if (message instanceof TankDestroyedMessage) {
-                        TankDestroyedMessage destroyedMsg = (TankDestroyedMessage) message;
-                        SwingUtilities.invokeLater(() -> handleTankDestroyed(destroyedMsg));
+                        if(isHost)
+                            ctx.opponentPlayer.isDestroyed = true;
+                        else
+                            ctx.player.isDestroyed = true;
                     }
                 } catch (InterruptedException e) {
                     e.printStackTrace();
@@ -85,34 +113,12 @@ public class GamePanel extends JPanel {
         }).start();
     }
 
-    // Update the opponent player's state
-    private void updateOpponentPlayer(GameStateUpdate update) {
-        opponentPlayer.x = update.x;
-        opponentPlayer.y = update.y;
-        opponentPlayer.angle = update.angle;
-        repaint();
-    }
-
-    // Spawn opponent's bullet
-    private void spawnOpponentBullet(BulletFiredMessage bulletMsg) {
-        BulletEntity bullet = new BulletEntity();
-        bullet.x = bulletMsg.x;
-        bullet.y = bulletMsg.y;
-        bullet.angle = bulletMsg.angle;
-        bullet.physVecs.add(new float[]{(float) Math.sin(Math.toRadians(bullet.angle)) * 10,
-                (float) -Math.cos(Math.toRadians(bullet.angle)) * 10});
-        ctx.bullets.add(bullet);
-        repaint();
-    }
-
     private void handleTankDestroyed(TankDestroyedMessage msg) {
-        // Find the tank with the given ID and mark it as destroyed
-        for (PlayerEntity tank : ctx.tanks) {
-            if (tank.id == msg.tankId) {
-                tank.isDestroyed = true;
-                break;
-            }
+        if(isHost){
+            ctx.opponentPlayer.isDestroyed = true;
         }
+        else
+            ctx.player.isDestroyed = true;
         repaint();
     }
 
@@ -171,46 +177,48 @@ public class GamePanel extends JPanel {
     private void physUpdate() {
         // Process player inputs
         for (var player : ctx.tanks) {
-            if (player.isDestroyed) continue;
             var angle = Math.toRadians(player.angle);
             double playerSpeed = 1.2;
 
             for (Integer key : player.heldKeys) {
+                if (player.isDestroyed) continue;
+                if(player != ctrlPlayer) continue;
+
                 if (key == KeyEvent.VK_RIGHT) {
-                    player.rotationVec = 1.0f;
+                    ctrlPlayer.rotationVec = 1.0f;
                 }
                 if (key == KeyEvent.VK_LEFT) {
-                    player.rotationVec = -1.0f;
+                    ctrlPlayer.rotationVec = -1.0f;
                 }
                 if (key == KeyEvent.VK_UP) {
-                    player.movementVec[0] = (float) (playerSpeed);
-                    player.movementVec[1] = (float) (playerSpeed * -1);
+                    ctrlPlayer.movementVec[0] = (float) (playerSpeed);
+                    ctrlPlayer.movementVec[1] = (float) (playerSpeed * -1);
                 }
                 if (key == KeyEvent.VK_DOWN) {
-                    player.movementVec[0] = (float) (playerSpeed * -1);
-                    player.movementVec[1] = (float) (playerSpeed);
+                    ctrlPlayer.movementVec[0] = (float) (playerSpeed * -1);
+                    ctrlPlayer.movementVec[1] = (float) (playerSpeed);
                 }
                 if (key == KeyEvent.VK_SPACE) {
-                    // Spawn a bullet
-                    BulletEntity bullet = new BulletEntity();
-                    bullet.x = player.x;
-                    bullet.y = player.y;
-                    bullet.angle = player.angle;
-                    var bulletSpeed = 10;
-                    bullet.physVecs.add(new float[]{
-                            (float) Math.sin(Math.toRadians(bullet.angle)) * bulletSpeed,
-                            (float) -Math.cos(Math.toRadians(bullet.angle)) * bulletSpeed
-                    });
-                    ctx.bullets.add(bullet);
-
-                    // Send bullet fired message
-                    if (networkManager != null) {
-                        BulletFiredMessage bulletMsg = new BulletFiredMessage(bullet.x, bullet.y, bullet.angle);
+                    if(System.currentTimeMillis() > (lastBullet+mpb)){
+                        lastBullet = System.currentTimeMillis();
+                        // Spawn Player bullet
+                        ctx.bullets.add(new BulletEntity());
+                        var bullet = ctx.bullets.get(ctx.bullets.size()-1);
+                        bullet.x = player.x;
+                        bullet.y = player.y;
+                        bullet.angle = player.angle;
+                        var bulletSpeed = 10;
+                        bullet.physVecs.add(new float[] {(float)bulletSpeed,(float)-1 * bulletSpeed});
+                        // Send msg
+                        BulletFiredMessage msg = new BulletFiredMessage(bullet.x, bullet.y, bullet.angle);
                         try {
-                            networkManager.sendMessage(bulletMsg);
-                        } catch (IOException e) {
-                            e.printStackTrace();
+                            networkManager.sendMessage(msg);
                         }
+                        catch(Exception e){
+                            ctx.bullets.remove(bullet);
+                            System.out.println("Failed to send bullet message.");
+                        }
+                        repaint();
                     }
                 }
             }
@@ -278,20 +286,8 @@ public class GamePanel extends JPanel {
             // Check for collisions
             if (entity instanceof BulletEntity) {
                 for (var tank : ctx.tanks) {
-                    if (tank != player && !tank.isDestroyed && entity.checkCollision(tank)) {
+                    if (!tank.isDestroyed && entity.checkCollision(tank)) {
                         tank.isDestroyed = true;
-                        ctx.bullets.remove(entity);
-
-                        // Send TankDestroyedMessage to opponent
-                        if (networkManager != null) {
-                            TankDestroyedMessage destroyedMsg = new TankDestroyedMessage(tank.id);
-                            try {
-                                networkManager.sendMessage(destroyedMsg);
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            }
-                        }
-                        break;
                     }
                 }
             }
@@ -299,8 +295,8 @@ public class GamePanel extends JPanel {
         }
 
         // Send player's state to opponent
-        if (networkManager != null) {
-            GameStateUpdate update = new GameStateUpdate(player.x, player.y, player.angle);
+        if (networkManager != null && networkManager.out != null) {
+            GameStateUpdate update = new GameStateUpdate(ctrlPlayer.x, ctrlPlayer.y, ctrlPlayer.angle);
             try {
                 networkManager.sendMessage(update);
             } catch (IOException e) {

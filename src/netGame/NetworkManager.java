@@ -9,7 +9,7 @@ import javax.swing.JOptionPane;
 
 public class NetworkManager {
     private Socket socket;
-    private ObjectOutputStream out;
+    public ObjectOutputStream out;
     private ObjectInputStream in;
     private BlockingQueue<Object> messageQueue = new LinkedBlockingQueue<>();
 
@@ -62,13 +62,11 @@ public class NetworkManager {
     public void sendMessage(Object message) throws IOException {
         out.writeObject(message);
         out.flush();
-        System.out.println("Sent message: " + message.getClass().getSimpleName() + " - " + message);
     }
 
 
     public Object receiveMessage() throws InterruptedException {
         Object message = messageQueue.take();
-        System.out.println("Received message: " + message.getClass().getSimpleName() + " - " + message);
         return message;
     }
 
