@@ -91,7 +91,18 @@ public class GamePanel extends JPanel {
                         updatedPlayer.angle = update.angle;
                     }
                     if (message instanceof BulletFiredMessage) {
-                        bulletMessages.add((BulletFiredMessage) message);
+                        SwingUtilities.invokeLater(() -> {
+                            BulletFiredMessage bulletMsg = (BulletFiredMessage) message;
+                            BulletEntity bullet = new BulletEntity();
+                            ctx.bullets.add(bullet);
+                            bullet.x = bulletMsg.x;
+                            bullet.y = bulletMsg.y;
+                            bullet.angle = bulletMsg.angle;
+                            var bulletSpeed = 10;
+                            bullet.physVecs.add(new float[] {(float)bulletSpeed,(float)-1 * bulletSpeed});
+                            System.out.println("Bullet message recieved");
+                            repaint();
+                        });
                     }
                     if (message instanceof TankDestroyedMessage) {
                         if(isHost)
@@ -157,18 +168,6 @@ public class GamePanel extends JPanel {
     }
 
     private void physUpdate() {
-        for(BulletFiredMessage bulletMsg : bulletMessages){
-            BulletEntity bullet = new BulletEntity();
-            ctx.bullets.add(bullet);
-            bullet.x = bulletMsg.x;
-            bullet.y = bulletMsg.y;
-            bullet.angle = bulletMsg.angle;
-            var bulletSpeed = 10;
-            bullet.physVecs.add(new float[] {(float)bulletSpeed,(float)-1 * bulletSpeed});
-            System.out.println("Bullet message recieved");
-            repaint();
-        }
-        bulletMessages.clear();
         // Process player inputs
         for (var player : ctx.tanks) {
             var angle = Math.toRadians(player.angle);
